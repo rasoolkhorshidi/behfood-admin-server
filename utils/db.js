@@ -1,11 +1,11 @@
 const mongoose = require("mongoose");
-const config = require("config");
+require("dotenv").config();
 
-const dbConfig = config.get("database");
+// Connect to MongoDB                     
 
 async function connectDB() {
   try {
-    await mongoose.connect(dbConfig.url);
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("✅ Admin-DB Connected...");
   } catch (err) {
     console.error("❌ DB Connection Error:", err.message);
