@@ -1,0 +1,10 @@
+{
+  "database": {
+    "url": "mongodb://localhost:27017/behfood",
+    "username": "admin",
+    "password": "password"
+  },
+  "server": {
+    "port": 5001
+  }
+}
