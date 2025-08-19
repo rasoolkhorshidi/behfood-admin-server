@@ -34,7 +34,7 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   await sendOTP(admin.phone, otp);
 
-  res.json({ message: "کد یکبارمصرف ارسال شد" });
+  res.json({phone: admin.phone , message: "کد یکبارمصرف ارسال شد" });
 });
 
 // مرحله ۲: تایید OTP و صدور JWT
@@ -61,11 +61,12 @@ router.post("/verify-otp", async (req, res) => {
   admin.otp = null;
   admin.otpExpires = null;
   await admin.save();
+  console.log("OTP verified successfully");
 
   const accessToken = jwt.sign(
     { id: admin._id, username: admin.username },
     process.env.JWT_SECRET,
-    { expiresIn: "15m" }
+    { expiresIn: "24h" }
   );
 
   const refreshToken = jwt.sign(
@@ -94,7 +95,7 @@ router.post("/refresh-token", async (req, res) => {
     const accessToken = jwt.sign(
       { id: decoded.id, username: decoded.username },
       process.env.JWT_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" }
     );
 
     res.json({ accessToken });
