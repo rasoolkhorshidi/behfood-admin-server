@@ -10,7 +10,13 @@ const { sendOTP } = require("../utils/sms");
 const loginLimiter = rateLimit({
   windowMs: 5 * 60 * 1000,
   max: 5,
-  message: "تعداد تلاش زیاد، بعد از ۵ دقیقه دوباره امتحان کنید.",
+  message: {
+    status: 429,
+    message:
+      "Too many requests from this IP, please try again after 5 minutes.",
+    errorCode: "RATE_LIMIT_EXCEEDED",
+  },
+  headers: true, // Include rate limit info in response headers
 });
 
 // مرحله ۱: یوزرنیم و پسورد
@@ -34,7 +40,7 @@ router.post("/login", loginLimiter, async (req, res) => {
 
   await sendOTP(admin.phone, otp);
 
-  res.json({phone: admin.phone , message: "کد یکبارمصرف ارسال شد" });
+  res.json({ phone: admin.phone, message: "کد یکبارمصرف ارسال شد" });
 });
 
 // مرحله ۲: تایید OTP و صدور JWT
