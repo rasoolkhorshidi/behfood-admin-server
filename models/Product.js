@@ -10,17 +10,6 @@ const productSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
-  price: {
-    type: Number,
-    required: true,
-    min: 0
-  },
-  stock: {
-    type: Number,
-    required: true,
-    min: 0,
-    default: 0
-  },
   images: [{
     type: String,
     required: true
@@ -38,11 +27,6 @@ const productSchema = new mongoose.Schema({
   subcategory: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Subcategory',
-    required: true
-  },
-  store: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Store',
     required: true
   },
   isActive: {
