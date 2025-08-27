@@ -1,18 +1,21 @@
-const User = require("../models/User");
+const { User } = require("../models/User");
 
 exports.getUsers = async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 });
     res.json(users);
   } catch (err) {
-    res.status(500).json({ message: "خطا در دریافت کاربران", error: err.message });
+    console.error(err);
+    res
+      .status(500)
+      .json({ message: "خطا در دریافت کاربران", error: err.message });
   }
 };
 
 exports.updateUserRole = async (req, res) => {
   try {
     const { id } = req.params;
-    const { type } = req.body;
+    const { request, type } = req.body;
 
     if (!["user", "store", "driver"].includes(type)) {
       return res.status(400).json({ message: "نقش نامعتبر" });
@@ -20,8 +23,8 @@ exports.updateUserRole = async (req, res) => {
 
     const updatedUser = await User.findByIdAndUpdate(
       id,
-      { type },
-      { new: true }
+      { type: type, request: request },
+      { new: true, runValidators: true }
     );
 
     if (!updatedUser) {
@@ -30,9 +33,9 @@ exports.updateUserRole = async (req, res) => {
 
     res.json(updatedUser);
   } catch (err) {
-    res.status(500).json({ 
+    res.status(500).json({
       message: "خطا در بروزرسانی نقش کاربر",
-      error: err.message 
+      error: err.message,
     });
   }
 };

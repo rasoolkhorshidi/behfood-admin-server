@@ -14,8 +14,18 @@ const addressSchema = new mongoose.Schema(
 
 const userSchema = new mongoose.Schema(
   {
-    name: { type: String, trim: true, minlength: 3, maxlength: 20 },
-    family: { type: String, trim: true, minlength: 3, maxlength: 20 },
+    name: {
+      type: String,
+      trim: true,
+      minlength: 3,
+      maxlength: 20,
+    },
+    family: {
+      type: String,
+      trim: true,
+      minlength: 3,
+      maxlength: 20,
+    },
     phone: {
       type: String,
       required: true,
@@ -34,13 +44,29 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "store", "driver"],
       default: "user",
     },
-    token: { type: String, default: null },
-    lastLogin: { type: Date, default: null },
-    isActive: { type: Boolean, default: false },
+    request: {
+      type: String,
+      enum: ["none", "store", "driver", "accepted", "rejected"],
+      default: "none",
+    },
+    token: {
+      type: String,
+      default: null,
+    },
+    lastLogin: {
+      type: Date,
+      default: null,
+    },
+    isActive: {
+      type: Boolean,
+      default: false,
+    },
     addresses: [addressSchema],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
 const User = mongoose.model("User", userSchema);
-module.exports = User;
+module.exports = {User};
