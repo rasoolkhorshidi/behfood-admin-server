@@ -8,6 +8,10 @@ const shopTypeSchema = new mongoose.Schema({
     trim: true,
     unique: true
   },
+  imageUrl: {
+    type: String,
+    default: ''
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -16,4 +20,4 @@ const shopTypeSchema = new mongoose.Schema({
 
 const ShopType = mongoose.model('ShopType', shopTypeSchema);
 
-module.exports = ShopType;
+module.exports = ShopType; 

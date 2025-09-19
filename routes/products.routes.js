@@ -14,9 +14,11 @@ const {
   createSubcategory,
   updateSubcategory,
   deleteSubcategory,
+  updateProduct,
+  deleteProduct,
   getCategories,
   getSubcategories,
-  getShopType
+  getShopType,
 } = require("../controllers/product.controller");
 const verifyAccessToken = require("../middleware/auth");
 
@@ -24,6 +26,8 @@ const verifyAccessToken = require("../middleware/auth");
 router.get("/", getProducts);
 router.get("/hierarchy", getProductHierarchy);
 router.post("/", verifyAccessToken, createProduct);
+router.put("/:id", verifyAccessToken, updateProduct);
+router.delete("/:id", verifyAccessToken, deleteProduct);
 
 // مدیریت ShopType
 

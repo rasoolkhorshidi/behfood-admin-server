@@ -2,6 +2,62 @@ const Product = require("../models/Product");
 const Category = require("../models/Category");
 const Subcategory = require("../models/Subcategory");
 const ShopType = require("../models/ShopType");
+const path = require("path");
+const fs = require("fs");
+
+// Helper: normalize image url/path so we store only the path (no origin)
+function normalizeImagePath(u) {
+  if (!u && u !== "") return u;
+  try {
+    // if it's an absolute URL, URL constructor will work
+    const parsed = new URL(u);
+    // keep pathname and search (if any) so stored value is like /uploads/xxx.jpg
+    return parsed.pathname + (parsed.search || "");
+  } catch (e) {
+    // not an absolute URL, ensure it starts with /
+    if (typeof u === "string" && u.length > 0)
+      return u.startsWith("/") ? u : `/${u}`;
+    return u || "";
+  }
+}
+
+// Safely delete a file under public/uploads if it exists and the path points there.
+function deleteUploadFile(u) {
+  try {
+    if (!u) return false;
+    // extract pathname if full url
+    let p = u;
+    try {
+      const parsed = new URL(u);
+      p = parsed.pathname;
+    } catch (e) {
+      // not absolute URL, use as-is
+    }
+
+    // ensure path points to /uploads/...
+    if (!p.startsWith("/uploads/")) {
+      // allow also 'uploads/...' without leading slash
+      if (p.startsWith("uploads/")) p = "/" + p;
+      else return false;
+    }
+
+    const uploadsDir = path.join(__dirname, "..", "public", "uploads");
+    const filename = path.basename(p);
+    const filePath = path.join(uploadsDir, filename);
+
+    // ensure resolved path inside uploadsDir
+    if (!filePath.startsWith(uploadsDir)) return false;
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    // swallow errors, return false
+    return false;
+  }
+}
 
 // دریافت تمام محصولات
 exports.getProducts = async (req, res) => {
@@ -31,8 +87,15 @@ exports.getProducts = async (req, res) => {
 // ایجاد محصول جدید
 exports.createProduct = async (req, res) => {
   try {
-    const { name, description, images, isActive, shopType, category, subcategory } =
-      req.body;
+    const {
+      name,
+      description,
+      images,
+      isActive,
+      shopType,
+      category,
+      subcategory,
+    } = req.body;
     // اعتبارسنجی وجود shopType، category و subcategory
     const [shopTypeExists, categoryExists, subcategoryExists] =
       await Promise.all([
@@ -55,30 +118,32 @@ exports.createProduct = async (req, res) => {
 
     // اعتبارسنجی ارتباط بین موجودیت‌ها
     if (categoryExists.shopType.toString() !== shopType) {
-      
       return res
         .status(400)
         .json({ message: "دسته‌بندی متعلق به این نوع فروشگاه نیست" });
     }
 
     if (subcategoryExists.category.toString() !== category) {
-      
       return res
         .status(400)
         .json({ message: "زیردسته‌بندی متعلق به این دسته‌بندی نیست" });
     }
 
+    const normalizedImages = Array.isArray(images)
+      ? images.map((i) => normalizeImagePath(i))
+      : images
+      ? [normalizeImagePath(images)]
+      : [];
+
     const product = new Product({
       name,
       description,
-      images,
+      images: normalizedImages,
       isActive,
       shopType,
       category,
       subcategory,
     });
-
-    
 
     await product.save();
 
@@ -175,9 +240,27 @@ exports.getSubcategories = async (req, res) => {
 // مدیریت نوع فروشگاه‌ها
 exports.createShopType = async (req, res) => {
   try {
-    const { name, isActive = true } = req.body;
-    const shopType = new ShopType({ name, isActive });
+    const { name, isActive = true, image, imageUrl, imagePath } = req.body;
+    // prefer explicit fields in this order
+    const finalImage = imageUrl || image || imagePath || "";
+    // جلوگیری از ثبت نام تکراری (بدون حساسیت به حروف بزرگ/کوچک)
+    if (name) {
+      const existing = await ShopType.findOne({
+        name: { $regex: `^${name}$`, $options: "i" },
+      });
+      if (existing) {
+        return res
+          .status(400)
+          .json({ message: "نام نوع فروشگاه قبلاً استفاده شده است" });
+      }
+    }
+    const shopType = new ShopType({
+      name,
+      isActive,
+      imageUrl: normalizeImagePath(finalImage),
+    });
     await shopType.save();
+
     res.status(201).json(shopType);
   } catch (err) {
     res.status(500).json({
@@ -190,13 +273,40 @@ exports.createShopType = async (req, res) => {
 exports.updateShopType = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, isActive } = req.body;
+    const { name, isActive, image, imageUrl, imagePath } = req.body;
+    const finalImage = imageUrl || image || imagePath;
 
-    const shopType = await ShopType.findByIdAndUpdate(
-      id,
-      { name, isActive },
-      { new: true }
-    );
+    // اگر کاربر نام جدید فرستاد، جلوگیری از تکراری بودن نام (غیرهم‌نام با رکورد فعلی)
+    if (name) {
+      const duplicate = await ShopType.findOne({
+        name: { $regex: `^${name}$`, $options: "i" },
+        _id: { $ne: id },
+      });
+      if (duplicate) {
+        return res.status(400).json({
+          message: "نام انتخاب شده برای نوع فروشگاه قبلاً استفاده شده است",
+        });
+      }
+    }
+
+    const existing = await ShopType.findById(id);
+    if (!existing)
+      return res.status(404).json({ message: "نوع فروشگاه یافت نشد" });
+
+    const update = { name, isActive };
+    if (typeof finalImage !== "undefined")
+      update.imageUrl = normalizeImagePath(finalImage);
+
+    const shopType = await ShopType.findByIdAndUpdate(id, update, {
+      new: true,
+    });
+
+    // if image changed, delete old uploaded file
+    if (typeof finalImage !== "undefined") {
+      const old = existing.imageUrl;
+      const newVal = update.imageUrl;
+      if (old && old !== newVal) deleteUploadFile(old);
+    }
 
     if (!shopType) {
       return res.status(404).json({ message: "نوع فروشگاه یافت نشد" });
@@ -208,6 +318,90 @@ exports.updateShopType = async (req, res) => {
       message: "خطا در ویرایش نوع فروشگاه",
       error: err.message,
     });
+  }
+};
+
+// به‌روزرسانی محصول
+exports.updateProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const {
+      name,
+      description,
+      images,
+      isActive,
+      shopType,
+      category,
+      subcategory,
+    } = req.body;
+
+    // validate relations if provided
+    if (shopType) {
+      const shopTypeExists = await ShopType.findById(shopType);
+      if (!shopTypeExists)
+        return res.status(400).json({ message: "نوع فروشگاه یافت نشد" });
+    }
+    if (category) {
+      const categoryExists = await Category.findById(category);
+      if (!categoryExists)
+        return res.status(400).json({ message: "دسته‌بندی یافت نشد" });
+    }
+    if (subcategory) {
+      const subcategoryExists = await Subcategory.findById(subcategory);
+      if (!subcategoryExists)
+        return res.status(400).json({ message: "زیردسته‌بندی یافت نشد" });
+    }
+
+    const existing = await Product.findById(id);
+    if (!existing) return res.status(404).json({ message: "محصول یافت نشد" });
+
+    const update = {
+      name,
+      description,
+      isActive,
+      shopType,
+      category,
+      subcategory,
+    };
+    if (Array.isArray(images))
+      update.images = images.map((i) => normalizeImagePath(i));
+
+    const product = await Product.findByIdAndUpdate(id, update, { new: true });
+
+    // if images changed, delete any removed files from uploads
+    if (Array.isArray(images)) {
+      const oldImages = Array.isArray(existing.images) ? existing.images : [];
+      const newImages = Array.isArray(product.images) ? product.images : [];
+      // delete files that were in oldImages but not in newImages
+      oldImages.forEach((old) => {
+        if (!newImages.includes(old)) deleteUploadFile(old);
+      });
+    }
+
+    res.json(product);
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "خطا در ویرایش محصول", error: err.message });
+  }
+};
+
+// حذف محصول
+exports.deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = await Product.findById(id);
+    if (!product) return res.status(404).json({ message: "محصول یافت نشد" });
+
+    // delete associated upload files
+    if (Array.isArray(product.images)) {
+      product.images.forEach((i) => deleteUploadFile(i));
+    }
+
+    await Product.findByIdAndDelete(id);
+    res.json({ message: "محصول با موفقیت حذف شد" });
+  } catch (err) {
+    res.status(500).json({ message: "خطا در حذف محصول", error: err.message });
   }
 };
 
@@ -223,12 +417,15 @@ exports.deleteShopType = async (req, res) => {
       });
     }
 
-    const shopType = await ShopType.findByIdAndDelete(id);
-
-    if (!shopType) {
+    const shopType = await ShopType.findById(id);
+    if (!shopType)
       return res.status(404).json({ message: "نوع فروشگاه یافت نشد" });
-    }
 
+
+    // delete associated image if any
+    if (shopType.imageUrl) deleteUploadFile(shopType.imageUrl);
+
+    await ShopType.findByIdAndDelete(id);
     res.json({ message: "نوع فروشگاه با موفقیت حذف شد" });
   } catch (err) {
     res.status(500).json({
@@ -252,7 +449,7 @@ exports.createCategory = async (req, res) => {
     const category = new Category({
       name,
       shopType,
-      image,
+      image: normalizeImagePath(image),
       isActive,
     });
 
@@ -281,7 +478,7 @@ exports.updateCategory = async (req, res) => {
 
     const category = await Category.findByIdAndUpdate(
       id,
-      { name, shopType, image, isActive },
+      { name, shopType, image: normalizeImagePath(image), isActive },
       { new: true }
     );
 
